@@ -3,12 +3,20 @@ import streamlit as st
 import pandas as pd
 import datetime
 import toml
-import streamlit as st
-import toml
+
+# ============ 数据文件定义 ============
+XP_FILE = "xp_data.csv"              # 存「累计经验(accumulated_xp)」与「可用经验(current_xp)」
+TASKS_FILE = "tasks.csv"             # 存任务
+REWARDS_FILE = "rewards.csv"         # 存"可兑换奖励"列表
+REDEEMED_FILE = "redeemed_rewards.csv"   # 存"已兑换奖励"列表
 
 # 读取 config.toml 里的密码
-config = toml.load("config.toml")
-CORRECT_PASSWORD = config["auth"]["password"]
+try:
+    config = toml.load("config.toml")
+    CORRECT_PASSWORD = config["auth"]["password"]
+except Exception as e:
+    st.error(f"读取配置文件失败：{e}")
+    CORRECT_PASSWORD = "password"  # 默认密码
 
 # **确保 session_state 存在**
 if "authenticated" not in st.session_state:
@@ -40,78 +48,98 @@ if st.button("🔓 退出登录"):
     st.experimental_set_query_params(auth="false")  # 清除 URL 记录
     st.rerun()  # **刷新页面，回到登录界面**
 
-# ============ 数据文件定义 ============
-XP_FILE = "xp_data.csv"              # 存「累计经验(accumulated_xp)」与「可用经验(current_xp)」
-TASKS_FILE = "tasks.csv"             # 存任务
-REWARDS_FILE = "rewards.csv"         # 存“可兑换奖励”列表
-REDEEMED_FILE = "redeemed_rewards.csv"   # 存“已兑换奖励”列表
-
 # ============ 1. 初始化/修正 XP_FILE ============
 if not os.path.exists(XP_FILE):
-    xp_df = pd.DataFrame([{"accumulated_xp": 0, "current_xp": 0}])
-    xp_df.to_csv(XP_FILE, index=False)
+    print(f"⚠️ 警告: 经验值数据文件 {XP_FILE} 不存在，创建默认文件。")
+    xp_df = pd.DataFrame({"accumulated_xp": [0], "current_xp": [0]})  # 创建默认数据
+    xp_df.to_csv(XP_FILE, index=False)  # 写入 CSV 文件
 else:
-    import os
-    import pandas as pd
+    try:
+        # 读取 CSV 文件，并跳过损坏的行
+        xp_df = pd.read_csv(XP_FILE, on_bad_lines='skip')
+        print("✅ 经验值数据文件加载成功")
+    except Exception as e:
+        print(f"❌ 读取 {XP_FILE} 失败: {e}")
+        xp_df = pd.DataFrame({"accumulated_xp": [0], "current_xp": [0]})  # 读取失败时创建默认 DataFrame
 
-    # 🔍 Step 1: 检查 XP_FILE 是否存在
-    if not os.path.exists(XP_FILE):
-        print(f"⚠️ 警告: 经验值数据文件 {XP_FILE} 不存在，创建默认文件。")
-        xp_df = pd.DataFrame({"current_xp": [0]})  # 🔹 创建默认数据
-        xp_df.to_csv(XP_FILE, index=False)  # 🔹 写入 CSV 文件
-    else:
-        try:
-            # 📌 Step 2: 读取 CSV 文件，并跳过损坏的行
-            xp_df = pd.read_csv(XP_FILE, on_bad_lines='skip')
-            print("✅ 经验值数据文件加载成功")
-        except Exception as e:
-            print(f"❌ 读取 {XP_FILE} 失败: {e}")
-            xp_df = pd.DataFrame({"current_xp": [0]})  # 读取失败时创建默认 DataFrame
-
+    # 确保两列都存在
     for col in ["accumulated_xp", "current_xp"]:
         if col not in xp_df.columns:
             xp_df[col] = 0
     xp_df.to_csv(XP_FILE, index=False)
 
-accumulated_xp = xp_df.at[0, "accumulated_xp"]
-current_xp = xp_df.at[0, "current_xp"]
+# 确保读取的值为整数类型
+accumulated_xp = int(xp_df.at[0, "accumulated_xp"])
+current_xp = int(xp_df.at[0, "current_xp"])
 
 # ============ 2. 初始化/修正 TASKS_FILE ============
 if not os.path.exists(TASKS_FILE):
     tasks_df = pd.DataFrame(columns=["分类", "任务名称", "经验值", "截止日期", "完成次数"])
     tasks_df.to_csv(TASKS_FILE, index=False)
 else:
-    tasks_df = pd.read_csv(TASKS_FILE)
-    # 补列
-    if "截止日期" not in tasks_df.columns:
-        tasks_df["截止日期"] = ""
-    if "完成次数" not in tasks_df.columns:
-        tasks_df["完成次数"] = 0
-    tasks_df.to_csv(TASKS_FILE, index=False)
+    try:
+        tasks_df = pd.read_csv(TASKS_FILE)
+        # 补列
+        if "截止日期" not in tasks_df.columns:
+            tasks_df["截止日期"] = ""
+        if "完成次数" not in tasks_df.columns:
+            tasks_df["完成次数"] = 0
+        tasks_df.to_csv(TASKS_FILE, index=False)
+    except Exception as e:
+        print(f"❌ 读取 {TASKS_FILE} 失败: {e}")
+        tasks_df = pd.DataFrame(columns=["分类", "任务名称", "经验值", "截止日期", "完成次数"])
+        tasks_df.to_csv(TASKS_FILE, index=False)
 
 # ============ 3. 初始化/修正 REWARDS_FILE (可兑换奖励) ============
 if not os.path.exists(REWARDS_FILE):
     rewards_df = pd.DataFrame(columns=["奖励名称", "经验值消耗"])
     rewards_df.to_csv(REWARDS_FILE, index=False)
 else:
-    rewards_df = pd.read_csv(REWARDS_FILE)
-    # 补列
-    for col in ["奖励名称", "经验值消耗"]:
-        if col not in rewards_df.columns:
-            rewards_df[col] = 0
-    rewards_df.to_csv(REWARDS_FILE, index=False)
+    try:
+        # 读取 CSV，并尝试修复潜在问题
+        rewards_df = pd.read_csv(REWARDS_FILE, encoding="utf-8")
+
+        # 修复数据格式
+        rewards_df["奖励名称"] = rewards_df["奖励名称"].astype(str).str.strip()
+
+        # 强制转换"经验值消耗"列为整数
+        rewards_df["经验值消耗"] = (
+            rewards_df["经验值消耗"]
+            .astype(str)  # 先转换为字符串，避免数据类型错误
+            .str.replace(r"[^\d]", "", regex=True)  # 只保留数字，去除任何可能的特殊字符
+        )
+
+        # 尝试转换为整数，如果失败则填充 0
+        rewards_df["经验值消耗"] = pd.to_numeric(rewards_df["经验值消耗"], errors="coerce").fillna(0).astype(int)
+
+    except Exception as e:
+        print(f"❌ 读取 {REWARDS_FILE} 失败: {e}")
+        rewards_df = pd.DataFrame(columns=["奖励名称", "经验值消耗"])  # 读取失败时创建默认 DataFrame
+
+# 确保 rewards_df 结构完整
+for col in ["奖励名称", "经验值消耗"]:
+    if col not in rewards_df.columns:
+        rewards_df[col] = 0 if col == "经验值消耗" else ""
+
+# 写回 CSV，确保数据格式统一
+rewards_df.to_csv(REWARDS_FILE, index=False)
 
 # ============ 4. 初始化/修正 REDEEMED_FILE (已兑换奖励) ============
 if not os.path.exists(REDEEMED_FILE):
-    # 存储“已兑换奖励”的信息：奖励名称, 经验值消耗, 已兑换次数
+    # 存储"已兑换奖励"的信息：奖励名称, 经验值消耗, 已兑换次数
     redeemed_df = pd.DataFrame(columns=["奖励名称", "经验值消耗", "已兑换次数"])
     redeemed_df.to_csv(REDEEMED_FILE, index=False)
 else:
-    redeemed_df = pd.read_csv(REDEEMED_FILE)
-    for col in ["奖励名称", "经验值消耗", "已兑换次数"]:
-        if col not in redeemed_df.columns:
-            redeemed_df[col] = 0
-    redeemed_df.to_csv(REDEEMED_FILE, index=False)
+    try:
+        redeemed_df = pd.read_csv(REDEEMED_FILE)
+        for col in ["奖励名称", "经验值消耗", "已兑换次数"]:
+            if col not in redeemed_df.columns:
+                redeemed_df[col] = 0 if col in ["经验值消耗", "已兑换次数"] else ""
+        redeemed_df.to_csv(REDEEMED_FILE, index=False)
+    except Exception as e:
+        print(f"❌ 读取 {REDEEMED_FILE} 失败: {e}")
+        redeemed_df = pd.DataFrame(columns=["奖励名称", "经验值消耗", "已兑换次数"])
+        redeemed_df.to_csv(REDEEMED_FILE, index=False)
 
 # ============ Streamlit 界面开始 ============
 
@@ -132,8 +160,7 @@ cur_change = st.sidebar.number_input(
 if st.sidebar.button("应用调整"):
     # 第一部分：调整累计总经验
     if acc_change != 0:
-        # 这里你可以决定是否允许累计总经验变成负数
-        # 如果不允许，就额外判断:
+        # 如果不允许累计总经验变成负数
         if accumulated_xp + acc_change < 0:
             st.sidebar.error("累计总经验不能低于0，操作无效")
         else:
@@ -141,7 +168,7 @@ if st.sidebar.button("应用调整"):
 
     # 第二部分：调整可用经验
     if cur_change != 0:
-        # 如果不允许可用经验变负:
+        # 如果不允许可用经验变负
         if current_xp + cur_change < 0:
             st.sidebar.error("可用经验不能低于0，操作无效")
         else:
@@ -154,7 +181,6 @@ if st.sidebar.button("应用调整"):
 
     st.sidebar.success(f"成功调整：累计经验 {acc_change} / 可用经验 {cur_change}")
     st.rerun()
-
 
 # ---- B. 任务管理 ----
 st.sidebar.header("📝 任务管理")
@@ -199,7 +225,7 @@ for category, group in grouped:
         tdone = row["完成次数"]
         tdeadline = row["截止日期"]
 
-        # 如果是“期间限定任务”且有截止日期，显示剩余天数
+        # 如果是"期间限定任务"且有截止日期，显示剩余天数
         if category == "期间限定任务" and tdeadline:
             try:
                 d = datetime.datetime.strptime(tdeadline, "%Y-%m-%d").date()
@@ -216,7 +242,7 @@ for category, group in grouped:
             tasks_df.loc[idx, "完成次数"] += 1
             tasks_df.to_csv(TASKS_FILE, index=False)
 
-            # “累计经验”与“可用经验”都增加
+            # "累计经验"与"可用经验"都增加
             accumulated_xp += txp
             current_xp += txp
             xp_df.at[0, "accumulated_xp"] = accumulated_xp
@@ -256,7 +282,7 @@ if st.sidebar.button("添加新奖励"):
     if not new_reward_name.strip():
         st.sidebar.error("奖励名称不能为空！")
     else:
-        # 添加到“可兑换奖励”列表
+        # 添加到"可兑换奖励"列表
         new_row = pd.DataFrame([{
             "奖励名称": new_reward_name.strip(),
             "经验值消耗": new_reward_cost
@@ -276,44 +302,26 @@ if not rewards_df.empty:
         st.sidebar.success(f"奖励 '{del_reward_name}' 已从可兑换列表删除！")
         st.rerun()
 
-# (F3) 显示 “可兑换奖励” 列表
+# (F3) 显示 "可兑换奖励" 列表
 if rewards_df.empty:
     st.write("**当前暂无可兑换奖励**")
 else:
     st.write("### 可兑换奖励")
     for idx, rrow in rewards_df.iterrows():
         rname = rrow["奖励名称"]
-        rcost = rrow["经验值消耗"]
+
+        # 直接从 DataFrame 获取经验值消耗并确保是整数类型
+        try:
+            rcost = int(rrow["经验值消耗"])
+        except (ValueError, TypeError):
+            rcost = 0
+            print(f"⚠️ 警告: 奖励 '{rname}' 的经验值消耗无效，已设为0")
 
         st.write(f"- {rname} (消耗 {rcost} 可用经验)")
 
-        # 确保 current_xp 是整数类型
-        current_xp = int(current_xp)
-
-        # 先打印出 rewards_df.iloc[idx]["经验值消耗"]，看看读取的是什么
-        raw_rcost = rewards_df.iloc[idx]["经验值消耗"]
-        print("DEBUG: rcost (raw) =", raw_rcost)
-
-        # 处理可能的错误情况，确保 rcost 是整数
-        if isinstance(raw_rcost, (int, float)):
-            rcost = int(raw_rcost)  # 直接转换
-        elif isinstance(raw_rcost, str) and raw_rcost.strip().isdigit():
-            rcost = int(raw_rcost.strip())  # 先去掉空格再转换
-        else:
-            print(f"⚠️ 错误！rewards_df.iloc[{idx}]['经验值消耗'] 不是有效数字: {raw_rcost}")
-            rcost = 0  # 设为 0，避免崩溃
-
         # 兑换逻辑
-        import streamlit as st
-
-        # 🔍 只在按钮点击后执行一次
         if st.button(f"兑换 {rname}", key=f"redeem_{idx}"):
             if current_xp >= rcost:  # 确保经验值足够
-                new_xp = current_xp - rcost  # 🔹 计算新的经验值
-                xp_df.at[0, "current_xp"] = new_xp  # 🔹 只更新一次
-                xp_df.to_csv(XP_FILE, index=False)  # 🔹 只写入一次
-                st.success(f"兑换成功！剩余经验值：{new_xp}")  # ✅ 确认兑换成功
-
                 # 扣减可用经验
                 current_xp -= rcost
                 xp_df.at[0, "current_xp"] = current_xp
@@ -335,11 +343,12 @@ else:
                     redeemed_df = pd.concat([redeemed_df, new_redeem], ignore_index=True)
 
                 redeemed_df.to_csv(REDEEMED_FILE, index=False)
-
                 st.success(f"成功兑换奖励：{rname}！消耗 {rcost} 可用经验")
                 st.rerun()
+            else:
+                st.error(f"经验值不足！需要 {rcost} 点经验，当前只有 {current_xp} 点")
 
-# (F4) “已兑换奖励”表展示 & 删除
+# (F4) "已兑换奖励"表展示 & 删除
 st.write("### 已获得的奖励统计")
 if redeemed_df.empty:
     st.write("你还没有兑换任何奖励哦~")
