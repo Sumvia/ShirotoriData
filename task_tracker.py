@@ -378,24 +378,23 @@ else:
 
         st.write(f"- {rname} (消耗 {rcost} 可用经验)")
 
-        # 替换你的 `st.button()` 逻辑
-        if f"button_clicked_{idx}" not in st.session_state:
-            st.session_state[f"button_clicked_{idx}"] = False
+        # 在脚本开始时重置按钮状态
+        st.session_state[f"button_clicked_{idx}"] = False
 
         if st.button(f"兑换 {rname}", key=f"redeem_{idx}") and not st.session_state[f"button_clicked_{idx}"]:
             st.session_state[f"button_clicked_{idx}"] = True  # 防止重复执行
             if current_xp >= rcost:
                 new_xp = current_xp - rcost
                 try:
-                    # 再次校验经验值
+                    # 原子操作：读取、扣除、写入
                     updated_xp_df = pd.read_csv(XP_FILE)
                     if updated_xp_df.at[0, "current_xp"] != current_xp:
                         st.error("经验值已发生变化，请刷新页面！")
                         logging.error("经验值校验失败！")
                         break
 
-                    xp_df.at[0, "current_xp"] = new_xp
-                    xp_df.to_csv(XP_FILE, index=False)
+                    updated_xp_df.at[0, "current_xp"] = new_xp
+                    updated_xp_df.to_csv(XP_FILE, index=False)
                     st.success(f"兑换成功！剩余经验值：{new_xp}")
 
                     # 更新 session_state
