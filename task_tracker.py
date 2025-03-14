@@ -304,11 +304,15 @@ else:
             rcost = 0  # 设为 0，避免崩溃
 
         # 兑换逻辑
-        if current_xp >= rcost:
-            if st.button(f"兑换 {rname}", key=f"redeem_{idx}"):
-                current_xp -= rcost
-                xp_df.at[0, "current_xp"] = current_xp
-                xp_df.to_csv(XP_FILE, index=False)
+        import streamlit as st
+
+        # 🔍 只在按钮点击后执行一次
+        if st.button(f"兑换 {rname}", key=f"redeem_{idx}"):
+            if current_xp >= rcost:  # 确保经验值足够
+                new_xp = current_xp - rcost  # 🔹 计算新的经验值
+                xp_df.at[0, "current_xp"] = new_xp  # 🔹 只更新一次
+                xp_df.to_csv(XP_FILE, index=False)  # 🔹 只写入一次
+                st.success(f"兑换成功！剩余经验值：{new_xp}")  # ✅ 确认兑换成功
 
                 # 扣减可用经验
                 current_xp -= rcost
