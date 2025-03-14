@@ -273,7 +273,8 @@ else:
 
         # 确保 current_xp 和 rcost 是整数类型
         current_xp = int(current_xp)
-        rcost = int(rcost)
+        st.write(f"DEBUG: rcost = {rcost}")  # 这行代码会让 Streamlit 在页面上显示 rcost 的值
+
 
         if current_xp >= rcost:
             if st.button(f"兑换 {rname}", key=f"redeem_{idx}"):
