@@ -51,7 +51,23 @@ if not os.path.exists(XP_FILE):
     xp_df = pd.DataFrame([{"accumulated_xp": 0, "current_xp": 0}])
     xp_df.to_csv(XP_FILE, index=False)
 else:
-    xp_df = pd.read_csv(XP_FILE)
+    import os
+    import pandas as pd
+
+    # 🔍 Step 1: 检查 XP_FILE 是否存在
+    if not os.path.exists(XP_FILE):
+        print(f"⚠️ 警告: 经验值数据文件 {XP_FILE} 不存在，创建默认文件。")
+        xp_df = pd.DataFrame({"current_xp": [0]})  # 🔹 创建默认数据
+        xp_df.to_csv(XP_FILE, index=False)  # 🔹 写入 CSV 文件
+    else:
+        try:
+            # 📌 Step 2: 读取 CSV 文件，并跳过损坏的行
+            xp_df = pd.read_csv(XP_FILE, on_bad_lines='skip')
+            print("✅ 经验值数据文件加载成功")
+        except Exception as e:
+            print(f"❌ 读取 {XP_FILE} 失败: {e}")
+            xp_df = pd.DataFrame({"current_xp": [0]})  # 读取失败时创建默认 DataFrame
+
     for col in ["accumulated_xp", "current_xp"]:
         if col not in xp_df.columns:
             xp_df[col] = 0
@@ -271,12 +287,23 @@ else:
 
         st.write(f"- {rname} (消耗 {rcost} 可用经验)")
 
-        # 确保 current_xp 和 rcost 是整数类型
+        # 确保 current_xp 是整数类型
         current_xp = int(current_xp)
-        # 确保 rcost 是整数
-        print("DEBUG: rcost =", rewards_df.iloc[idx]["经验值消耗"])  # 先打印出来看看
-        rcost = int(rewards_df.iloc[idx]["经验值消耗"])  # 转换为整数
 
+        # 先打印出 rewards_df.iloc[idx]["经验值消耗"]，看看读取的是什么
+        raw_rcost = rewards_df.iloc[idx]["经验值消耗"]
+        print("DEBUG: rcost (raw) =", raw_rcost)
+
+        # 处理可能的错误情况，确保 rcost 是整数
+        if isinstance(raw_rcost, (int, float)):
+            rcost = int(raw_rcost)  # 直接转换
+        elif isinstance(raw_rcost, str) and raw_rcost.strip().isdigit():
+            rcost = int(raw_rcost.strip())  # 先去掉空格再转换
+        else:
+            print(f"⚠️ 错误！rewards_df.iloc[{idx}]['经验值消耗'] 不是有效数字: {raw_rcost}")
+            rcost = 0  # 设为 0，避免崩溃
+
+        # 兑换逻辑
         if current_xp >= rcost:
             if st.button(f"兑换 {rname}", key=f"redeem_{idx}"):
                 current_xp -= rcost
