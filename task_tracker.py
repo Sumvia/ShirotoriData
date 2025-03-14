@@ -352,50 +352,82 @@ def redeem_reward(idx, rname, rcost):
 import streamlit as st
 import pandas as pd
 
-# 读取数据
-XP_FILE = "xp_data.csv"
-REDEEMED_FILE = "redeemed_rewards.csv"
-rewards_df = pd.read_csv("rewards.csv")
-xp_df = pd.read_csv(XP_FILE)
+import streamlit as st
+import pandas as pd
+import logging
 
-# 确保 `current_xp` 在 session_state 里
+# 配置日志记录
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# 假设已经定义了 XP_FILE, REDEEMED_FILE, rewards_df, xp_df, redeemed_df
+
+# 初始化 current_xp
 if "current_xp" not in st.session_state:
     st.session_state["current_xp"] = xp_df.at[0, "current_xp"]
 
 current_xp = st.session_state["current_xp"]
 
-st.write("### 🎁 可兑换奖励")
-for idx, row in rewards_df.iterrows():
-    rname = row["奖励名称"]
-    try:
-        rcost = int(row["经验值消耗"])  # 确保是整数
-    except ValueError:
-        st.error(f"奖励 '{rname}' 的经验值无效，已跳过")
-        continue
-
-    st.write(f"- {rname} (消耗 {rcost} 经验)")
-
-    # ✅ 解决 Streamlit Cloud 按钮重复触发
-    button_key = f"redeem_{idx}"
-    if button_key not in st.session_state:
-        st.session_state[button_key] = False
-
-    if st.button(f"兑换 {rname}", key=button_key):
-        if st.session_state[button_key]:  # 防止重复触发
+# (F3) 显示 “可兑换奖励” 列表
+if rewards_df.empty:
+    st.write("**当前暂无可兑换奖励**")
+else:
+    st.write("### 可兑换奖励")
+    for idx, rrow in rewards_df.iterrows():
+        rname = rrow["奖励名称"]
+        try:
+            rcost = int(rrow["经验值消耗"])  # 确保 rcost 是整数
+        except (ValueError, TypeError):
+            st.error(f"奖励 '{rname}' 的经验值消耗无效，已跳过")
             continue
-        st.session_state[button_key] = True  # 标记为已兑换
 
-        if current_xp >= rcost:
-            new_xp = current_xp - rcost
-            xp_df.at[0, "current_xp"] = new_xp
-            xp_df.to_csv(XP_FILE, index=False)
-            st.session_state["current_xp"] = new_xp
-            st.success(f"兑换成功！剩余经验：{new_xp}")
-        else:
-            st.error("经验值不足！")
+        st.write(f"- {rname} (消耗 {rcost} 可用经验)")
 
-        st.rerun()
+        # 在脚本开始时重置按钮状态
+        st.session_state[f"button_clicked_{idx}"] = False
 
+        if st.button(f"兑换 {rname}", key=f"redeem_{idx}") and not st.session_state[f"button_clicked_{idx}"]:
+            st.session_state[f"button_clicked_{idx}"] = True  # 防止重复执行
+            if current_xp >= rcost:
+                new_xp = current_xp - rcost
+                try:
+                    # 原子操作：读取、扣除、写入
+                    updated_xp_df = pd.read_csv(XP_FILE)
+                    if updated_xp_df.at[0, "current_xp"] != current_xp:
+                        st.error("经验值已发生变化，请刷新页面！")
+                        logging.error("经验值校验失败！")
+                        break
+
+                    updated_xp_df.at[0, "current_xp"] = new_xp
+                    updated_xp_df.to_csv(XP_FILE, index=False)
+                    st.success(f"兑换成功！剩余经验值：{new_xp}")
+
+                    # 更新 session_state
+                    st.session_state["current_xp"] = new_xp
+                    current_xp = new_xp
+
+                    # 更新已兑换奖励列表
+                    existing = redeemed_df[redeemed_df["奖励名称"] == rname]
+                    if len(existing) > 0:
+                        rid = existing.index[0]
+                        redeemed_df.at[rid, "已兑换次数"] += 1
+                    else:
+                        new_redeem = pd.DataFrame([{
+                            "奖励名称": rname,
+                            "经验值消耗": rcost,
+                            "已兑换次数": 1
+                        }])
+                        redeemed_df = pd.concat([redeemed_df, new_redeem], ignore_index=True)
+
+                    redeemed_df.to_csv(REDEEMED_FILE, index=False)
+
+                    # 确保 UI 刷新但不触发二次执行
+                    st.rerun()  # 替换为 st.rerun()
+                except Exception as e:
+                    st.error(f"兑换奖励时出错：{e}")
+                    logging.error(f"兑换奖励时出错：{e}")
+            else:
+                st.error("经验值不足，无法兑换！")
+                logging.error("经验值不足，无法兑换！")
 # (F4) "已兑换奖励"表展示 & 删除
 st.write("### 已获得的奖励统计")
 if redeemed_df.empty:
