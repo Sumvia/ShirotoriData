@@ -51,16 +51,20 @@ if st.button("🔓 退出登录"):
 # ============ 1. 初始化/修正 XP_FILE ============
 if not os.path.exists(XP_FILE):
     print(f"⚠️ 警告: 经验值数据文件 {XP_FILE} 不存在，创建默认文件。")
-    xp_df = pd.DataFrame({"accumulated_xp": [0], "current_xp": [0]})  # 创建默认数据
-    xp_df.to_csv(XP_FILE, index=False)  # 写入 CSV 文件
+    xp_df = pd.DataFrame({"accumulated_xp": [0], "current_xp": [0]})
+    xp_df.to_csv(XP_FILE, index=False)
 else:
     try:
-        # 读取 CSV 文件，并跳过损坏的行
         xp_df = pd.read_csv(XP_FILE, on_bad_lines='skip')
         print("✅ 经验值数据文件加载成功")
+    except pd.errors.EmptyDataError:
+        print(f"❌ 读取 {XP_FILE} 时数据为空，创建默认数据。")
+        xp_df = pd.DataFrame({"accumulated_xp": [0], "current_xp": [0]})
+        xp_df.to_csv(XP_FILE, index=False)
     except Exception as e:
         print(f"❌ 读取 {XP_FILE} 失败: {e}")
-        xp_df = pd.DataFrame({"accumulated_xp": [0], "current_xp": [0]})  # 读取失败时创建默认 DataFrame
+        xp_df = pd.DataFrame({"accumulated_xp": [0], "current_xp": [0]})
+
 
     # 确保两列都存在
     for col in ["accumulated_xp", "current_xp"]:
