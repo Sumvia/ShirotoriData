@@ -348,31 +348,70 @@ def redeem_reward(idx, rname, rcost):
     else:
         st.error(f"经验值不足！需要 {rcost} 点经验，当前只有 {current_xp} 点")
 
-# (F3) 显示 "可兑换奖励" 列表
+import streamlit as st
+import pandas as pd
+
+# 假设已经定义了 XP_FILE, REDEEMED_FILE, rewards_df, xp_df, redeemed_df
+
+# 初始化 current_xp
+if "current_xp" not in st.session_state:
+    st.session_state["current_xp"] = xp_df.at[0, "current_xp"]
+
+current_xp = st.session_state["current_xp"]
+
+# (F3) 显示 “可兑换奖励” 列表
 if rewards_df.empty:
     st.write("**当前暂无可兑换奖励**")
 else:
     st.write("### 可兑换奖励")
     for idx, rrow in rewards_df.iterrows():
         rname = rrow["奖励名称"]
-
-        # 确保经验值消耗为整数
         try:
-            rcost = int(rrow["经验值消耗"])
+            rcost = int(rrow["经验值消耗"])  # 确保 rcost 是整数
         except (ValueError, TypeError):
-            rcost = 0
-            print(f"⚠️ 警告: 奖励 '{rname}' 的经验值消耗无效，已设为0")
+            st.error(f"奖励 '{rname}' 的经验值消耗无效，已跳过")
+            continue
 
         st.write(f"- {rname} (消耗 {rcost} 可用经验)")
 
-        # 使用唯一的 key，避免重复：将 idx 和 rname 组合到 key 中
-        if not st.session_state["redeemed_flags"].get(idx, False):
-            st.button(f"兑换 {rname}",
-                      key=f"redeem_{idx}_{rname}",
-                      on_click=redeem_reward,
-                      args=(idx, rname, rcost))
-        else:
-            st.write("（已兑换）")
+        # 在脚本开始时重置按钮状态
+        st.session_state[f"button_clicked_{idx}"] = False
+
+        if st.button(f"兑换 {rname}", key=f"redeem_{idx}") and not st.session_state[f"button_clicked_{idx}"]:
+            st.session_state[f"button_clicked_{idx}"] = True  # 防止重复执行
+            if current_xp >= rcost:
+                new_xp = current_xp - rcost
+                try:
+                    xp_df.at[0, "current_xp"] = new_xp
+                    xp_df.to_csv(XP_FILE, index=False)
+                    st.success(f"兑换成功！剩余经验值：{new_xp}")
+
+                    #  更新 session_state
+                    st.session_state["current_xp"] = new_xp
+                    current_xp = new_xp
+
+                    # 更新已兑换奖励列表
+                    existing = redeemed_df[redeemed_df["奖励名称"] == rname]
+                    if len(existing) > 0:
+                        rid = existing.index[0]
+                        redeemed_df.at[rid, "已兑换次数"] += 1
+                    else:
+                        new_redeem = pd.DataFrame([{
+                            "奖励名称": rname,
+                            "经验值消耗": rcost,
+                            "已兑换次数": 1
+                        }])
+                        redeemed_df = pd.concat([redeemed_df, new_redeem], ignore_index=True)
+
+                    redeemed_df.to_csv(REDEEMED_FILE, index=False)
+
+                    # ✅ 确保 UI 刷新但不触发二次执行
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"兑换奖励时出错：{e}")
+            else:
+                st.error("经验值不足，无法兑换！")
+
 
 
 
