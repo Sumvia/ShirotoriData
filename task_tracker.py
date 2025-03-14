@@ -350,6 +350,10 @@ def redeem_reward(idx, rname, rcost):
 
 import streamlit as st
 import pandas as pd
+import logging
+
+# 配置日志记录
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # 假设已经定义了 XP_FILE, REDEEMED_FILE, rewards_df, xp_df, redeemed_df
 
@@ -374,19 +378,27 @@ else:
 
         st.write(f"- {rname} (消耗 {rcost} 可用经验)")
 
-        # 在脚本开始时重置按钮状态
-        st.session_state[f"button_clicked_{idx}"] = False
+        # 替换你的 `st.button()` 逻辑
+        if f"button_clicked_{idx}" not in st.session_state:
+            st.session_state[f"button_clicked_{idx}"] = False
 
         if st.button(f"兑换 {rname}", key=f"redeem_{idx}") and not st.session_state[f"button_clicked_{idx}"]:
             st.session_state[f"button_clicked_{idx}"] = True  # 防止重复执行
             if current_xp >= rcost:
                 new_xp = current_xp - rcost
                 try:
+                    # 再次校验经验值
+                    updated_xp_df = pd.read_csv(XP_FILE)
+                    if updated_xp_df.at[0, "current_xp"] != current_xp:
+                        st.error("经验值已发生变化，请刷新页面！")
+                        logging.error("经验值校验失败！")
+                        break
+
                     xp_df.at[0, "current_xp"] = new_xp
                     xp_df.to_csv(XP_FILE, index=False)
                     st.success(f"兑换成功！剩余经验值：{new_xp}")
 
-                    #  更新 session_state
+                    # 更新 session_state
                     st.session_state["current_xp"] = new_xp
                     current_xp = new_xp
 
@@ -405,12 +417,14 @@ else:
 
                     redeemed_df.to_csv(REDEEMED_FILE, index=False)
 
-                    # ✅ 确保 UI 刷新但不触发二次执行
-                    st.rerun()
+                    # 确保 UI 刷新但不触发二次执行
+                    st.rerun()  # 替换为 st.rerun()
                 except Exception as e:
                     st.error(f"兑换奖励时出错：{e}")
+                    logging.error(f"兑换奖励时出错：{e}")
             else:
                 st.error("经验值不足，无法兑换！")
+                logging.error("经验值不足，无法兑换！")
 
 
 
