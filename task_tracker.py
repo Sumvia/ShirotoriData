@@ -274,7 +274,7 @@ else:
         # 确保 current_xp 和 rcost 是整数类型
         current_xp = int(current_xp)
         # 确保 rcost 是整数
-        print("DEBUG: rcost =", rewards_df.iloc[idx]["经验值消耗"])  # 先打印调试信息
+        print("DEBUG: rcost =", rewards_df.iloc[idx]["经验值消耗"])  # 先打印出来看看
         rcost = int(rewards_df.iloc[idx]["经验值消耗"])  # 转换为整数
 
         if current_xp >= rcost:
