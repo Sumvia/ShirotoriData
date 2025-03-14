@@ -271,15 +271,6 @@ else:
 
         st.write(f"- {rname} (消耗 {rcost} 可用经验)")
 
-        git
-        add.
-        git
-        commit - m
-        "修复数据类型错误"
-        git
-        push
-        origin
-        main
         # 确保 current_xp 和 rcost 是整数类型
         current_xp = int(current_xp)
         rcost = int(rcost)
