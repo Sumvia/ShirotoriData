@@ -311,139 +311,102 @@ if "redeemed_flags" not in st.session_state:
 
 import streamlit as st
 import pandas as pd
+import os
 
-# 假设已经定义了 XP_FILE, REDEEMED_FILE, rewards_df, xp_df, redeemed_df, current_xp
+# 📂 文件路径
+XP_FILE = "xp_data.csv"
+REDEEMED_FILE = "redeemed_rewards.csv"
+REWARDS_FILE = "rewards.csv"
 
-# 初始化 redeemed_flags
-if "redeemed_flags" not in st.session_state:
-    st.session_state["redeemed_flags"] = {}
+# **1️⃣ 读取数据**
+try:
+    rewards_df = pd.read_csv(REWARDS_FILE)
+    xp_df = pd.read_csv(XP_FILE)
+except FileNotFoundError as e:
+    st.error(f"文件读取错误：{e}")
+    st.stop()
 
-def redeem_reward(idx, rname, rcost):
-    global current_xp, xp_df, redeemed_df
-    if current_xp >= rcost:
-        # 设置标志位，防止重复触发
-        st.session_state["redeemed_flags"][idx] = True
+# **确保 `redeemed_rewards.csv` 存在**
+if not os.path.exists(REDEEMED_FILE):
+    redeemed_df = pd.DataFrame(columns=["奖励名称", "经验值消耗", "已兑换次数"])
+else:
+    redeemed_df = pd.read_csv(REDEEMED_FILE)
 
-        # 扣减可用经验
-        current_xp -= rcost
-        xp_df.at[0, "current_xp"] = current_xp
-        xp_df.to_csv(XP_FILE, index=False)
-
-        # 更新已兑换记录
-        existing = redeemed_df[redeemed_df["奖励名称"] == rname]
-        if len(existing) > 0:
-            rid = existing.index[0]
-            redeemed_df.at[rid, "已兑换次数"] += 1
-        else:
-            new_redeem = pd.DataFrame([{
-                "奖励名称": rname,
-                "经验值消耗": rcost,
-                "已兑换次数": 1
-            }])
-            redeemed_df = pd.concat([redeemed_df, new_redeem], ignore_index=True)
-        redeemed_df.to_csv(REDEEMED_FILE, index=False)
-
-        st.success(f"成功兑换奖励：{rname}！消耗 {rcost} 可用经验")
-        st.rerun()  # 重新运行脚本，更新 UI
-    else:
-        st.error(f"经验值不足！需要 {rcost} 点经验，当前只有 {current_xp} 点")
-
-
-import streamlit as st
-import pandas as pd
-
-import streamlit as st
-import pandas as pd
-import logging
-
-# 配置日志记录
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# 假设已经定义了 XP_FILE, REDEEMED_FILE, rewards_df, xp_df, redeemed_df
-
-# 初始化 current_xp
+# **2️⃣ 初始化 Streamlit session_state**
 if "current_xp" not in st.session_state:
-    st.session_state["current_xp"] = xp_df.at[0, "current_xp"]
+    st.session_state["current_xp"] = int(xp_df.at[0, "current_xp"]) if "current_xp" in xp_df.columns else 0
 
 current_xp = st.session_state["current_xp"]
 
-# (F3) 显示 “可兑换奖励” 列表
-if rewards_df.empty:
-    st.write("**当前暂无可兑换奖励**")
-else:
-    st.write("### 可兑换奖励")
-    for idx, rrow in rewards_df.iterrows():
-        rname = rrow["奖励名称"]
-        try:
-            rcost = int(rrow["经验值消耗"])  # 确保 rcost 是整数
-        except (ValueError, TypeError):
-            st.error(f"奖励 '{rname}' 的经验值消耗无效，已跳过")
-            continue
+# **🎁 3️⃣ 可兑换奖励**
+st.write("### 🎁 可兑换奖励")
+for idx, row in rewards_df.iterrows():
+    rname = row["奖励名称"]
+    try:
+        rcost = int(row["经验值消耗"])
+    except ValueError:
+        st.error(f"奖励 '{rname}' 的经验值无效，已跳过")
+        continue
 
-        st.write(f"- {rname} (消耗 {rcost} 可用经验)")
+    st.write(f"- {rname} (消耗 {rcost} 经验)")
 
-        # 在脚本开始时重置按钮状态
-        st.session_state[f"button_clicked_{idx}"] = False
+    button_key = f"redeem_{idx}"
 
-        if st.button(f"兑换 {rname}", key=f"redeem_{idx}") and not st.session_state[f"button_clicked_{idx}"]:
-            st.session_state[f"button_clicked_{idx}"] = True  # 防止重复执行
-            if current_xp >= rcost:
-                new_xp = current_xp - rcost
-                try:
-                    # 原子操作：读取、扣除、写入
-                    updated_xp_df = pd.read_csv(XP_FILE)
-                    if updated_xp_df.at[0, "current_xp"] != current_xp:
-                        st.error("经验值已发生变化，请刷新页面！")
-                        logging.error("经验值校验失败！")
-                        break
+    if st.button(f"兑换 {rname}", key=button_key):
+        if current_xp >= rcost:
+            new_xp = current_xp - rcost
+            xp_df.at[0, "current_xp"] = new_xp
+            try:
+                # **更新经验值**
+                xp_df.to_csv(XP_FILE, index=False)
+                st.session_state["current_xp"] = new_xp
+                st.success(f"成功兑换 {rname}！剩余经验：{new_xp}")
 
-                    updated_xp_df.at[0, "current_xp"] = new_xp
-                    updated_xp_df.to_csv(XP_FILE, index=False)
-                    st.success(f"兑换成功！剩余经验值：{new_xp}")
+                # **更新兑换记录**
+                if rname in redeemed_df["奖励名称"].values:
+                    redeemed_df.loc[redeemed_df["奖励名称"] == rname, "已兑换次数"] += 1
+                else:
+                    new_row = pd.DataFrame([[rname, rcost, 1]], columns=["奖励名称", "经验值消耗", "已兑换次数"])
+                    redeemed_df = pd.concat([redeemed_df, new_row], ignore_index=True)
 
-                    # 更新 session_state
-                    st.session_state["current_xp"] = new_xp
-                    current_xp = new_xp
+                # **写入 CSV，确保数据持久化**
+                redeemed_df.to_csv(REDEEMED_FILE, index=False)
 
-                    # 更新已兑换奖励列表
-                    existing = redeemed_df[redeemed_df["奖励名称"] == rname]
-                    if len(existing) > 0:
-                        rid = existing.index[0]
-                        redeemed_df.at[rid, "已兑换次数"] += 1
-                    else:
-                        new_redeem = pd.DataFrame([{
-                            "奖励名称": rname,
-                            "经验值消耗": rcost,
-                            "已兑换次数": 1
-                        }])
-                        redeemed_df = pd.concat([redeemed_df, new_redeem], ignore_index=True)
+                # **刷新 UI，确保数据正确显示**
+                st.rerun()
 
-                    redeemed_df.to_csv(REDEEMED_FILE, index=False)
+            except Exception as e:
+                st.error(f"经验值更新失败：{e}")
+        else:
+            st.error("经验值不足！")
 
-                    # 确保 UI 刷新但不触发二次执行
-                    st.rerun()  # 替换为 st.rerun()
-                except Exception as e:
-                    st.error(f"兑换奖励时出错：{e}")
-                    logging.error(f"兑换奖励时出错：{e}")
-            else:
-                st.error("经验值不足，无法兑换！")
-                logging.error("经验值不足，无法兑换！")
-# (F4) "已兑换奖励"表展示 & 删除
-st.write("### 已获得的奖励统计")
-if redeemed_df.empty:
+# **🎁 4️⃣ 显示已兑换奖励**
+st.write("### 🏆 已获得的奖励")
+if redeemed_df.empty or redeemed_df.isnull().values.all():
     st.write("你还没有兑换任何奖励哦~")
 else:
+    # **确保所有数据是字符串，避免 Streamlit 解析错误**
+    redeemed_df["奖励名称"] = redeemed_df["奖励名称"].astype(str)
+    redeemed_df["经验值消耗"] = redeemed_df["经验值消耗"].astype(str)
+    redeemed_df["已兑换次数"] = redeemed_df["已兑换次数"].astype(str)
+
+    # **使用 Streamlit 表格显示**
     st.dataframe(redeemed_df)
 
-    # 在侧边栏增加 删除操作
+    # **🎯 5️⃣ 删除已兑换奖励**
     st.sidebar.header("🗑 删除已兑换的记录")
-    if not redeemed_df.empty:
-        del_redeem_name = st.sidebar.selectbox(
-            "选择要删除的'已兑换奖励'",
-            redeemed_df["奖励名称"].tolist()
-        )
-        if st.sidebar.button("删除所选已兑换"):
-            redeemed_df = redeemed_df[redeemed_df["奖励名称"] != del_redeem_name]
+    del_redeem_name = st.sidebar.selectbox(
+        "选择要删除的已兑换奖励",
+        redeemed_df["奖励名称"].tolist() if not redeemed_df.empty else []
+    )
+    if st.sidebar.button("删除所选已兑换"):
+        redeemed_df = redeemed_df[redeemed_df["奖励名称"] != del_redeem_name]
+        try:
             redeemed_df.to_csv(REDEEMED_FILE, index=False)
             st.sidebar.success(f"已删除 '{del_redeem_name}' 的兑换记录！")
             st.rerun()
+        except Exception as e:
+            st.sidebar.error(f"删除记录失败：{e}")
+
+
+
