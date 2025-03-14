@@ -273,9 +273,9 @@ else:
 
         # 确保 current_xp 和 rcost 是整数类型
         current_xp = int(current_xp)
-        rcost = int(rewards_df.iloc[idx]["经验值消耗"])  # 用 iloc 确保获取的是数据
-
-
+        # 确保 rcost 是整数
+        print("DEBUG: rcost =", rewards_df.iloc[idx]["经验值消耗"])  # 先打印调试信息
+        rcost = int(rewards_df.iloc[idx]["经验值消耗"])  # 转换为整数
 
         if current_xp >= rcost:
             if st.button(f"兑换 {rname}", key=f"redeem_{idx}"):
