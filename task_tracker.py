@@ -276,8 +276,11 @@ else:
         rcost = int(rcost)
 
         if current_xp >= rcost:
-            if current_xp >= rcost:
-            if st.button(f"兑换【{rname}】", key=f"redeem_{idx}"):
+            if st.button(f"兑换 {rname}", key=f"redeem_{idx}"):
+                current_xp -= rcost
+                xp_df.at[0, "current_xp"] = current_xp
+                xp_df.to_csv(XP_FILE, index=False)
+:
                 # 扣减可用经验
                 current_xp -= rcost
                 xp_df.at[0, "current_xp"] = current_xp
