@@ -273,7 +273,8 @@ else:
 
         # 确保 current_xp 和 rcost 是整数类型
         current_xp = int(current_xp)
-        st.write(f"DEBUG: rcost = {rcost}")  # 这行代码会让 Streamlit 在页面上显示 rcost 的值
+        rcost = int(rewards_df.iloc[idx]["经验值消耗"])  # 用 iloc 确保获取的是数据
+
 
 
         if current_xp >= rcost:
