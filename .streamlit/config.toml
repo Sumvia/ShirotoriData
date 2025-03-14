@@ -1,0 +1,6 @@
+[theme]
+primaryColor = "#91C8E4"  # 湖水蓝（主色调）
+backgroundColor = "#F4F2EE"  # 象牙白（柔和背景）
+secondaryBackgroundColor = "#D9B8C4"  # 淡粉紫（侧边栏背景）
+textColor = "#4B4453"  # 深灰紫（文字颜色）
+font = "sans serif"  # 选择无衬线字体，更现代清爽"
